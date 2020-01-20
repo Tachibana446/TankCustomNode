@@ -29,7 +29,7 @@ class distanceTerrainNode(om.MPxNode):
     def initialize():
         nAttr = om.MFnTypedAttribute()
         distanceTerrainNode.terrain = nAttr.create(
-            'terrain', 'terrain', om.MFnData.kMesh, om.MObject.kNullObj)
+            'terrain', 'terrain', om.MFnData.kMesh)
         nAttr.storable = True
         nAttr.writable = True
         nAttr = om.MFnNumericAttribute()
@@ -38,15 +38,39 @@ class distanceTerrainNode(om.MPxNode):
         )
         nAttr.storable = True
         nAttr.writable = True
+        nAttr = om.MFnNumericAttribute()
+        distanceTerrainNode.distance = nAttr.create(
+            'distance', 'distance', om.MFnNumericData.kFloat, 0
+        )
 
         distanceTerrainNode.addAttribute(distanceTerrainNode.terrain)
         distanceTerrainNode.addAttribute(distanceTerrainNode.jointPos)
+        distanceTerrainNode.addAttribute(distanceTerrainNode.distance)
+        distanceTerrainNode.attributeAffects(
+            distanceTerrainNode.terrain, distanceTerrainNode.distance)
+        distanceTerrainNode.attributeAffects(
+            distanceTerrainNode.jointPos, distanceTerrainNode.distance)
 
     def compute(self, plug, dataBlock):
-        return
+        if(plug == distanceTerrainNode.distance):
+
+            dataHandle = dataBlock.inputValue(distanceTerrainNode.terrain)
+            _mesh = dataHandle.asMesh()
+            if(not _mesh.hasFn(om.MFn.kMesh)):
+                print(_mesh)
+                print(_mesh.hasFn(om.MFn.kMesh))
+                print(_mesh.isNull)
+                print('mesh is null')
+            else:
+                polyIter = om.MItMeshPolygon(_mesh)
+                while not polyIter.isDone():
+                    print('\t vtx : {}'.format(polyIter.getPoints()))
+                    polyIter.next(0)
+            dataBlock.setClean(plug)
+
+# ノード名、ID, creater関数, Initialize関数, ノードの種類を登録
 
 
-# ノード名、ID, creater関数, Initialize関数, ノードの種類を登録 
 def initializePlugin(obj):
     mplugin = om.MFnPlugin(obj)
     try:

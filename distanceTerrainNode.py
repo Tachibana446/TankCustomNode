@@ -51,22 +51,66 @@ class distanceTerrainNode(om.MPxNode):
         distanceTerrainNode.attributeAffects(
             distanceTerrainNode.jointPos, distanceTerrainNode.distance)
 
+    # 実際の計算
     def compute(self, plug, dataBlock):
         if(plug == distanceTerrainNode.distance):
-
             dataHandle = dataBlock.inputValue(distanceTerrainNode.terrain)
             _mesh = dataHandle.asMesh()
             if(not _mesh.hasFn(om.MFn.kMesh)):
-                print(_mesh)
-                print(_mesh.hasFn(om.MFn.kMesh))
-                print(_mesh.isNull)
-                print('mesh is null')
-            else:
-                polyIter = om.MItMeshPolygon(_mesh)
-                while not polyIter.isDone():
-                    print('\t vtx : {}'.format(polyIter.getPoints()))
-                    polyIter.next(0)
+                dataBlock.setClean(plug)
+                return
+            dataHandle = dataBlock.inputValue(distanceTerrainNode.jointPos)
+            x, y, z = dataHandle.asFloat3() # 調査する点の座標
+            pvec = om.MFloatVector(x,y,z)
+            polyIter = om.MItMeshPolygon(_mesh)
+            nomesh = True # 直下に面がない場合のフラグ
+            # 面を構成する点ごとに繰り返す
+            while(not polyIter.isDone()):
+                triangles = polyIter.getTriangles(om.MSpace.kObject) # 頂点
+                _triPoints = triangles[0]
+                triPoints = [_triPoints[:3], _triPoints[3:]]
+                for (_ip, points) in enumerate(triPoints):
+                    length = len(points) # 頂点数
+                    count = 0 # 外積の結果
+                    yAvg = 0 # y成分平均
+                    for i in range(length):
+                        yAvg += (points[i]).y
+                        t1vec =  om.MFloatVector(points[i])
+                        t1vec.y = 0
+                        t2vec = om.MFloatVector(points[(i+1) % length])
+                        t2vec.y = 0
+                        sub1 = (pvec - t1vec)
+                        sub2 = (t1vec - t2vec)
+                        # print("[{}]:({}) ({}) ({})".format(fmt(points), str(sub1), str(sub2), str(sub1 ^ sub2)))
+                        if((sub1 ^ sub2).y >= 0):
+                            count += 1
+                        else:
+                            count -=1
+                    yAvg /= length
+                    if(count == length or count == -length):
+                        # 直下の面であるといえる
+                        outputHandle = dataBlock.outputValue(distanceTerrainNode.distance)
+                        outputHandle.setFloat(y - yAvg)
+                        nomesh = False
+                        break
+                if(not nomesh):
+                    break
+                polyIter.next(0)
+
+            if(nomesh):
+                outputHandle = dataBlock.outputValue(distanceTerrainNode.distance)
+                outputHandle.setFloat(999)
+
             dataBlock.setClean(plug)
+
+
+def fmt(obj):
+    if(obj is om.MPointArray):
+        return "[{}, {}, {}]".format(fmt(obj[0]),fmt(obj[1]),fmt(obj[2]))
+    elif(obj is om.MPoint):
+        return "({}, {}, {})".format(str(obj.x),str(obj.y),str(obj.z))
+    else:
+        return str(obj)
 
 # ノード名、ID, creater関数, Initialize関数, ノードの種類を登録
 

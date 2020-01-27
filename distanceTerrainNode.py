@@ -3,6 +3,7 @@ import maya.api.OpenMaya as om
 import maya.api.OpenMayaUI as omui
 import math
 import sys
+# import pdb
 
 # Use Api 2.0
 
@@ -18,6 +19,7 @@ class distanceTerrainNode(om.MPxNode):
     terrain = om.MObject()
     jointPos = om.MObject()
     distance = om.MObject()
+    unit = 0.01  # 単位（今回はメートルからcmに直す）
 
     def __init__(self):
         om.MPxNode.__init__(self)
@@ -71,16 +73,21 @@ class distanceTerrainNode(om.MPxNode):
                 return
             dataHandle = dataBlock.inputValue(distanceTerrainNode.jointPos)
             x, y, z = dataHandle.asFloat3()  # 調査する点の座標
-            pvec = om.MFloatVector(x, y, z)
-            polyIter = om.MItMeshPolygon(_mesh)
+            pvec = om.MFloatVector(x, y, z) # 調査する点のベクトル
+            polyIter = om.MItMeshPolygon(_mesh)  # 走査するメッシュのイテレータ
             # ワールド行列
             dataHandle = dataBlock.inputValue(
                 distanceTerrainNode.terrainMatrix)
             matrix = dataHandle.asMatrix()
+            # ワールド行列の単位をcmからメートルへ
+            unitMatrix = om.MMatrix(
+                [[self.unit, 0, 0, 0], [0, self.unit, 0, 0], [0, 0, self.unit, 0], [0, 0, 0, 1]])
+            matrix *= unitMatrix
 
             nomesh = True  # 直下に面がない場合のフラグ
-            # 面を構成する点ごとに繰り返す
+            # 面をごとに繰り返す
             while(not polyIter.isDone()):
+                # 各面を三角形に分割しY軸方向に貫通しているか調べる
                 triangles = polyIter.getTriangles(om.MSpace.kObject)  # 頂点
                 _triPoints = triangles[0]
                 triPoints = [_triPoints[:3], _triPoints[3:]]
@@ -94,7 +101,7 @@ class distanceTerrainNode(om.MPxNode):
                         # ワールド座標に
                         t1vec = self.vectorCalc(t1vec, matrix)
                         t2vec = self.vectorCalc(t2vec, matrix)
-                        yAvg += t1vec.y
+                        yAvg += t1vec.y # 合計し、最後に点の数で割る
                         t1vec.y = 0
                         t2vec.y = 0
                         sub1 = (pvec - t1vec)
@@ -105,7 +112,9 @@ class distanceTerrainNode(om.MPxNode):
                         else:
                             count -= 1
                     yAvg /= length
+                    # Abs(count) == length -> 外積の向きがすべて同じ＝貫通
                     if(count == length or count == -length):
+                        # pdb.set_trace()
                         # 直下の面であるといえる
                         outputHandle = dataBlock.outputValue(
                             distanceTerrainNode.distance)
@@ -127,18 +136,12 @@ class distanceTerrainNode(om.MPxNode):
     @staticmethod
     def vectorCalc(vec, matrix):
         if(not isinstance(matrix, om.MMatrix)):
-            # print('is not matrix')
             return vec
         vm = om.MMatrix([[vec.x, 0, 0, 1], [0, vec.y, 0, 1],
                          [0, 0, vec.z, 1], [0, 0, 0, 1]])
         res = vm * matrix
-        # print('input vector:{}'.format(vec))
-        # print('world matrix')
-        # print(matrix)
-        # print('result vector')
         result = om.MFloatVector(res.getElement(
             0, 0), res.getElement(1, 1), res.getElement(2, 2))
-        # print(result)
         return om.MFloatVector(result)
 
 
